@@ -77,6 +77,59 @@ $env:IRACING_AGENT_CONFIG = "C:\path\to\agent.yaml"
 .\iracing-agent.exe run
 ```
 
+Run as interactive system tray app on Windows:
+
+```powershell
+.\iracing-agent.exe tray
+```
+
+For development mode in tray (uses `./dev-telemetry` + JSON dump files):
+
+```powershell
+.\iracing-agent.exe tray --logs-only
+```
+
+Tray menu includes:
+- Start Agent
+- Stop Agent
+- Run Doctor
+- Open Config Folder
+- Open JSON Dump Folder
+- Exit
+
+## Install on Windows startup
+
+1. Build Windows binary (from Linux/macOS):
+
+```bash
+GOOS=windows GOARCH=amd64 go build -o dist/iracing-agent.exe ./cmd/iracing-agent
+```
+
+2. Copy to Windows machine:
+   - `dist/iracing-agent.exe`
+   - `scripts/install-windows-startup.ps1`
+   - optional: your prepared `config/agent.yaml`
+
+3. Run installer script in Windows PowerShell:
+
+```powershell
+.\install-windows-startup.ps1 -SourceExe .\iracing-agent.exe -Mode normal
+```
+
+For development mode (`--logs-only` + `dev-output/parsed-json` dumps):
+
+```powershell
+.\install-windows-startup.ps1 -SourceExe .\iracing-agent.exe -Mode log-only
+```
+
+If you already have a config file:
+
+```powershell
+.\install-windows-startup.ps1 -SourceExe .\iracing-agent.exe -SourceConfig .\agent.yaml -Mode normal
+```
+
+The script installs into `%LOCALAPPDATA%\iracing-agent` and registers a Scheduled Task named `iRacingAgent` to run at user logon.
+
 ## Rails endpoint contract (initial)
 
 - `POST /api/v1/telemetry_uploads`

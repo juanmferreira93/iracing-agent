@@ -43,6 +43,10 @@ func main() {
 		if err := run(cfg, os.Args[2:]); err != nil {
 			log.Fatalf("run failed: %v", err)
 		}
+	case "tray":
+		if err := runTray(cfg, os.Args[2:]); err != nil {
+			log.Fatalf("tray failed: %v", err)
+		}
 	case "doctor":
 		if err := runDoctor(cfg, os.Args[2:]); err != nil {
 			log.Fatalf("doctor failed: %v", err)
@@ -65,27 +69,11 @@ func run(cfg config.Config, args []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	idx, err := state.NewIndex(cfg.Agent.StateFile)
+	svc, err := newIngestService(cfg, logOnlyEnabled)
 	if err != nil {
 		return err
 	}
-
-	spool, err := queue.NewSpool(cfg.Agent.SpoolDir, cfg.Agent.MaxRetries)
-	if err != nil {
-		return err
-	}
-
 	watchPaths := effectiveWatchPaths(cfg, logOnlyEnabled)
-	uploader := selectUploader(cfg, logOnlyEnabled)
-
-	svc := service.New(
-		cfg,
-		watcher.NewFileWatcher(watchPaths),
-		parser.NewIBTParser(),
-		uploader,
-		idx,
-		spool,
-	)
 
 	if logOnlyEnabled {
 		log.Printf("iracing-agent started in log-only mode (watching %d paths)", len(watchPaths))
@@ -131,6 +119,7 @@ func runDoctor(cfg config.Config, args []string) error {
 func printUsage() {
 	fmt.Println("Usage:")
 	fmt.Println("  iracing-agent run [--log-only|--logs-only]")
+	fmt.Println("  iracing-agent tray [--log-only|--logs-only] (Windows only)")
 	fmt.Println("  iracing-agent doctor [--log-only|--logs-only]")
 	fmt.Println("Config path via IRACING_AGENT_CONFIG (default: config/agent.yaml)")
 	fmt.Println("In --log-only, dumps JSON files to IRACING_AGENT_JSON_DUMP_DIR (default: ./dev-output/parsed-json)")
@@ -140,13 +129,43 @@ func selectUploader(cfg config.Config, logOnly bool) interface {
 	UploadTelemetry(context.Context, domain.UploadBundle) error
 } {
 	if logOnly {
-		dumpDir := os.Getenv("IRACING_AGENT_JSON_DUMP_DIR")
-		if dumpDir == "" {
-			dumpDir = "./dev-output/parsed-json"
-		}
-		return client.NewLogUploader(dumpDir)
+		return client.NewLogUploader(resolveDumpDir())
 	}
 	return client.NewRailsClient(cfg.Rails)
+}
+
+func resolveDumpDir() string {
+	dumpDir := os.Getenv("IRACING_AGENT_JSON_DUMP_DIR")
+	if dumpDir == "" {
+		dumpDir = "./dev-output/parsed-json"
+	}
+	return dumpDir
+}
+
+func newIngestService(cfg config.Config, logOnly bool) (*service.IngestService, error) {
+	idx, err := state.NewIndex(cfg.Agent.StateFile)
+	if err != nil {
+		return nil, err
+	}
+
+	spool, err := queue.NewSpool(cfg.Agent.SpoolDir, cfg.Agent.MaxRetries)
+	if err != nil {
+		return nil, err
+	}
+
+	watchPaths := effectiveWatchPaths(cfg, logOnly)
+	uploader := selectUploader(cfg, logOnly)
+
+	svc := service.New(
+		cfg,
+		watcher.NewFileWatcher(watchPaths),
+		parser.NewIBTParser(),
+		uploader,
+		idx,
+		spool,
+	)
+
+	return svc, nil
 }
 
 func effectiveWatchPaths(cfg config.Config, logOnly bool) []string {
