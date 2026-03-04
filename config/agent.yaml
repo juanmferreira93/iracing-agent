@@ -1,0 +1,13 @@
+agent:
+  watch_paths:
+    - "./dev-telemetry"
+  scan_interval_seconds: 10
+  state_file: "./config/agent-state.json"
+  spool_dir: "./config/spool"
+  max_retries: 8
+
+rails:
+  base_url: "http://localhost:3000"
+  api_key: "replace-with-generated-api-key"
+  upload_path: "/api/v1/telemetry_uploads"
+  health_path: "/up"
